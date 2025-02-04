@@ -3,7 +3,7 @@ const { executeQuery } = require('../config/database');
 
 // Fetch all reviews for a movie
 const getReviewsForMovie = async (req, res) => {
-  const query = 'SELECT * FROM reviews WHERE movie_id = ?';
+  const query = 'SELECT * FROM reviews WHERE movieid = ?';
   const { movie_id } = req.params;
   try {
     const reviews = await executeQuery(query, [movie_id]);
@@ -15,13 +15,15 @@ const getReviewsForMovie = async (req, res) => {
 
 // Add a review for a movie
 const addReview = async (req, res) => {
-  const { movie_id, user_id, review_text } = req.body;
-  const query = 'INSERT INTO reviews (movie_id, user_id, review_text) VALUES (?, ?, ?)';
+  const { movie_id, user_id, review_text, rating } = req.body;
+  const query = 'INSERT INTO reviews (userid, reviewtext, rating, movieid) VALUES (?, ?, ?, ?)';
   try {
-    const result = await executeQuery(query, [movie_id, user_id, review_text]);
+    const result = await executeQuery(query, [user_id, review_text, rating, movie_id]);
     res.status(201).json({ message: 'Review added', id: result.insertId });
   } catch (error) {
     res.status(500).json({ error: 'Error adding review' });
+    console.log("error: ",error);
+    console.log(error);
   }
 };
 

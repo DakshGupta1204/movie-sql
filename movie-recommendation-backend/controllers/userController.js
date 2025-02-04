@@ -1,6 +1,7 @@
 // controllers/userController.js
 const { executeQuery } = require('../config/database');
-
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 // Fetch all users
 const getAllUsers = async (req, res) => {
   const query = 'SELECT * FROM users'; // Write the SQL query here
@@ -13,17 +14,105 @@ const getAllUsers = async (req, res) => {
 };
 
 // Fetch user by ID
-const getUserById = async (req, res) => {
-  const query = 'SELECT * FROM users WHERE id = ?';
-  const { id } = req.params;
+const getUserByToken = async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1]; // Extract token
+
+  if (!token) {
+    return res.status(401).json({ error: "Unauthorized: No token provided" });
+  }
+
   try {
-    const user = await executeQuery(query, [id]);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); // Verify token
+    const userId = decoded.id; // Extract user ID from token
+
+    const query = "SELECT * FROM users WHERE id = ?";
+    const user = await executeQuery(query, [userId]);
+
     if (user.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
+
     res.status(200).json(user[0]);
   } catch (error) {
-    res.status(500).json({ error: 'Error fetching user' });
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+};
+
+//login
+
+const loginUser = async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Check if the user exists
+    const query = "SELECT * FROM users WHERE email = ?";
+    const user = await executeQuery(query, [email]);
+    console.log(user);
+    if (user.length === 0) {
+      return res.status(404).json({ error: "User does not exist" });
+    }
+
+    // Validate password
+    const isMatch = await bcrypt.compare(password, user[0].password);
+
+    if (!isMatch) {
+      console.log("email", email);
+      console.log("password", password);
+      return res.status(401).json({ error: "Invalid credentials" });
+      
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: user[0].id, email: user[0].email },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+    res.status(200).json({ message: "Login successful", token, fullName: user[0].name });
+  } catch (error) {
+    res.status(500).json({ error: "Error logging in" });
+    console.log(error);
+  }
+};
+
+const signupUser = async (req, res) => {
+  const { email, password, fullName } = req.body;
+
+  // Validate input fields
+  if (!email || !password || !fullName) {
+    return res.status(400).json({ error: "Email, password, and full name are required" });
+  }
+
+  try {
+    // Check if the user already exists
+    const checkUserQuery = "SELECT * FROM users WHERE email = ?";
+    const existingUser = await executeQuery(checkUserQuery, [email]);
+    console.log("existingUser", existingUser);
+    if (existingUser.length > 0) {
+      return res.status(409).json({ error: "User already exists" });
+    }
+
+    // Hash the password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Insert new user into the database
+    const insertUserQuery = "INSERT INTO users (email, password, name) VALUES (?, ?, ?)";
+    await executeQuery(insertUserQuery, [email, hashedPassword, fullName]);
+
+    // Generate JWT token
+    const user = { email, fullName };
+    const token = jwt.sign(
+      { email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    // Send response
+    res.status(201).json({ message: "User registered successfully", token });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error registering user" });
   }
 };
 
@@ -67,8 +156,10 @@ const deleteUser = async (req, res) => {
 
 module.exports = {
   getAllUsers,
-  getUserById,
+  getUserByToken,
   createUser,
   updateUser,
   deleteUser,
+  loginUser,
+  signupUser
 };

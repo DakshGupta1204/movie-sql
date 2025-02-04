@@ -1,5 +1,29 @@
 // controllers/movieController.js
+const axios = require('axios');
 const { executeQuery } = require('../config/database');
+
+// Fetch movie data from the API and store in database 
+// const OMDB_URL = 'http://www.omdbapi.com/?i=tt3896198&apikey=';
+// const fetchAndStoreMovies = async () => {
+//   try {
+//     const response = await axios.get(`${OMDB_URL}${process.env.OMDB_API_KEY}`);
+//     console.log("response: ",response);
+//     const movies = response.data.results;
+//     console.log("movies: ",movies);
+//     const query = 'INSERT INTO movies (title, genre, release_date) VALUES (?, ?, ?)';
+//     movies.forEach(async (movie) => {
+//       console.log("movie: ",movie);
+//       const { title, genre_ids, release_date } = movie;
+//       const genre = genre_ids[0];
+//       await executeQuery(query, [title, genre, release_date]);
+//     });
+//   } catch (error) {
+//     console.error('Error fetching/storing movies',error);
+//   }
+// };
+
+// fetchAndStoreMovies();
+
 
 // Fetch all movies
 const getAllMovies = async (req, res) => {
@@ -14,14 +38,14 @@ const getAllMovies = async (req, res) => {
 
 // Fetch movie by ID
 const getMovieById = async (req, res) => {
-  const query = 'SELECT * FROM movies WHERE id = ?';
   const { id } = req.params;
+  const OMDB_URL = `http://www.omdbapi.com/?i=${id}&apikey=${process.env.OMDB_API_KEY}`;
   try {
-    const movie = await executeQuery(query, [id]);
-    if (movie.length === 0) {
-      return res.status(404).json({ error: 'Movie not found' });
+    const response = await axios.get(OMDB_URL);
+    if (response.data.Response === "False") {
+      return res.status(404).json({ error: "Movie not found" });
     }
-    res.status(200).json(movie[0]);
+    res.status(200).json(response.data);
   } catch (error) {
     res.status(500).json({ error: 'Error fetching movie' });
   }
@@ -63,6 +87,26 @@ const deleteMovie = async (req, res) => {
     res.status(500).json({ error: 'Error deleting movie' });
   }
 };
+// Fetch movie by name from OMDB API
+const getMovieByName = async (req, res) => {
+  const { name } = req.params;
+  const page = req.query.page || 1;
+  const OMDB_URL = `http://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&s=${encodeURIComponent(name)}&page=${page}`;
+
+  try {
+    const response = await axios.get(OMDB_URL);
+    if (response.data.Response === "False") {
+      return res.status(404).json({ error: "Movie not found" });
+    }
+    res.status(200).json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: "Error fetching movie from OMDB API" });
+  }
+};
+
+module.exports = {
+  getMovieByName,
+};
 
 module.exports = {
   getAllMovies,
@@ -70,4 +114,5 @@ module.exports = {
   createMovie,
   updateMovie,
   deleteMovie,
+  getMovieByName,
 };
